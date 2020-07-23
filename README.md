@@ -10,11 +10,12 @@ After adding Org3 back to system channel, we can create new channel Org1-Org3.
 
 All the crypto material (for all the three orgs, and configtx.yaml is updated).
 
-Use one terminal
+Use main terminal
 ```
 cd fabric-samples/
 git clone https://github.com/kctam/3-org-test-network
 cd 3-org-test-network
+docker-compose -f docker/docker-compose-test-net.yaml up -d
 ```
 
 Then open two terminals,
@@ -29,4 +30,9 @@ Terminal for Org2
 ```
 cd fabric-samples/3-org-test-network
 source terminalorg2
+```
+
+To tear down containers, in main terminal
+```
+docker-compose -f docker/docker-compose-test-net.yaml down -v
 ```
