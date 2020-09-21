@@ -1,0 +1,59 @@
+If org in consortium:
+
+From orderer
+export PATH=${PWD}/../bin:${PWD}:$PATH
+export FABRIC_CFG_PATH=${PWD}/configtx/
+configtxgen -profile TwoOrgsChannel -outputCreateChannelTx ./channel-artifacts/channel1.tx -channelID channel1-3
+
+From 1st Org(change name of channel and the tx anb block files)
+peer channel create -o localhost:7050 -c channel1-2 --ordererTLSHostnameOverride orderer.example.com -f ./channel-artifacts/channel1-2.tx --outputBlock ./channel-artifacts/channel1-2.block --tls --cafile $ORDERER_CA
+peer channel join -b ./channel-artifacts/channel1-2.block
+
+From 2nd Org
+peer channel join -b ./channel-artifacts/channel1-2.block
+
+
+If org in not in consortium:
+
+Add new org to myChannel
+
+Configuration Block captured in System Channel
+From Orderer
+peer channel fetch config config_block_sys.pb -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com -c system-channel --tls --cafile $ORDERER_CA
+
+Configuration Block captured in Application Channel
+From Org1 (change name of .pb file)
+peer channel fetch config config_3org_block.pb -c mychannel
+
+Add Org3 to System Channel and then Create Channel with Org3
+From Orderer
+peer channel fetch config config_block_sys.pb -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com -c system-channel --tls --cafile $ORDERER_CA
+
+Construct configuration update(change org name and filenames)
+configtxlator proto_decode --input config_block_sys.pb --type common.Block | jq .data.data[0].payload.data.config > config.json
+jq -s '.[0] * {"channel_group":{"groups":{"Consortiums":{"groups":{"SampleConsortium":{"groups": {"Org3MSP":.[1]}}}}}}}' config.json ./organizations/peerOrganizations/org3.example.com/org3.json > modified_config.json
+configtxlator proto_encode --input config.json --type common.Config --output config.pb
+configtxlator proto_encode --input modified_config.json --type common.Config --output modified_config.pb
+configtxlator compute_update --channel_id system-channel --original config.pb --updated modified_config.pb --output org3_update.pb
+configtxlator proto_decode --input org3_update.pb --type common.ConfigUpdate | jq . > org3_update.json
+echo '{"payload":{"header":{"channel_header":{"channel_id":"'system-channel'", "type":2}},"data":{"config_update":'$(cat org3_update.json)'}}}' | jq . > org3_update_in_envelope.json
+configtxlator proto_encode --input org3_update_in_envelope.json --type common.Envelope --output org3_update_in_envelope.pb
+
+Sign the update with orderer admin (change filenames)
+From Orderer
+peer channel update -f org3_update_in_envelope.pb -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com -c system-channel --tls --cafile $ORDERER_CA
+
+peer channel fetch config config_block_sys_update.pb -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com -c system-channel --tls --cafile $ORDERER_CA
+
+Create Channel with new Org (change channel name and tx and block file names)
+From orderer
+export PATH=${PWD}/../bin:${PWD}:$PATH
+export FABRIC_CFG_PATH=${PWD}/configtx/
+configtxgen -profile TwoOrgsChannel -outputCreateChannelTx ./channel-artifacts/channel1.tx -channelID channel1-3
+from Org1
+peer channel create -o localhost:7050 -c channel1-3 --ordererTLSHostnameOverride orderer.example.com -f ./channel-artifacts/channel1-3.tx --outputBlock ./channel-artifacts/channel1-3.block --tls --cafile $ORDERER_CA
+peer channel join -b ./channel-artifacts/channel1-3.block
+
+From 2nd Org
+peer channel join -b ./channel-artifacts/channel1-3.block
+
